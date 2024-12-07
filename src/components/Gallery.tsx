@@ -1,94 +1,69 @@
-import React, {useCallback, useEffect, useState} from 'react';
+import React, {useEffect} from 'react';
 import {useNavigate} from "react-router-dom";
 import MasonryCSS from 'react-masonry-css';
-import axios from 'axios';
+import {useMedia} from '../hooks/MediaHook';
 
 interface MediaFile {
+    blobUrl: string;
     url: string;
     type: 'image' | 'video' | 'audio' | 'unknown';
     filename: string;
 }
 
-interface GalleryProps {
-    userDir: string | null;
-}
-
-const Gallery: React.FC<GalleryProps> = ({userDir}) => {
-    const [media, setMedia] = useState<MediaFile[]>([]);
-    const [isLoading, setIsLoading] = useState(true);
+const Gallery: React.FC<{ userDir: string | null }> = ({userDir}) => {
     const navigate = useNavigate();
-
-    const getFileType = (filename: string): MediaFile['type'] => {
-        const extension = filename.split('.').pop()?.toLowerCase() || '';
-
-        const imageExtensions = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'svg'];
-        const videoExtensions = ['mp4', 'avi', 'mov', 'wmv', 'flv', 'mkv', 'webm'];
-        const audioExtensions = ['mp3', 'wav', 'ogg', 'flac', 'aac', 'm4a'];
-
-        if (imageExtensions.includes(extension)) return 'image';
-        if (videoExtensions.includes(extension)) return 'video';
-        if (audioExtensions.includes(extension)) return 'audio';
-
-        return 'unknown';
-    };
-
-    const fetchMedia = useCallback(async () => {
-        const token = sessionStorage.getItem('authToken');
-
-        if (!token || !userDir) {
-            navigate('/');
-            return;
-        }
-
-        try {
-            const fileListResponse = await axios.get(`${import.meta.env.VITE_HOST}/api/${userDir}?dir=compressed`, {
-                headers: {
-                    Authorization: `Bearer ${token}`,
-                },
-            });
-
-            const fileList = fileListResponse.data.files;
-            const mediaFiles: MediaFile[] = fileList.map((filename: string) => ({
-                url: `${import.meta.env.VITE_HOST}/cdn/${userDir}/compressed/${filename}?token=${token}`,
-                type: getFileType(filename),
-                filename
-            }));
-
-            setMedia(mediaFiles);
-        } catch (error) {
-            console.error('Error fetching media:', error);
-        } finally {
-            setIsLoading(false);
-        }
-    }, [userDir, navigate]);
+    const {media, isLoading, fetchMedia} = useMedia();
 
     useEffect(() => {
-        fetchMedia().catch((error) => {
-            console.error(error);
-        });
-    }, [fetchMedia]);
+        if (userDir) {
+            fetchMedia(userDir).catch((error) => {
+                console.error(error);
+            });
+        } else {
+            navigate('/');
+        }
+    }, [userDir, fetchMedia, navigate]);
 
     const renderMediaContent = (file: MediaFile) => {
         const mediaStyles = {
             width: "100%",
             display: "block",
-            borderRadius: "3px"
+            borderRadius: "3px",
         };
+
+        if (!file.blobUrl) {
+            return (
+                <div
+                    style={{
+                        width: "100%",
+                        padding: "10px",
+                        textAlign: "center",
+                        backgroundColor: "#f0f0f0",
+                    }}
+                >
+                    Loading {file.filename}...
+                </div>
+            );
+        }
 
         switch (file.type) {
             case 'image':
                 return (
                     <img
-                        src={file.url}
-                        style={mediaStyles}
+                        src={file.blobUrl}
                         alt={file.filename}
+                        style={mediaStyles}
+                        loading="lazy"
+                        onError={(e) => {
+                            e.currentTarget.src = "src/assets/404.png";
+                        }}
                     />
                 );
 
             case 'video':
                 return (
                     <video
-                        src={file.url}
+                        src={file.blobUrl}
                         style={mediaStyles}
                         controls
                     />
@@ -97,7 +72,7 @@ const Gallery: React.FC<GalleryProps> = ({userDir}) => {
             case 'audio':
                 return (
                     <audio
-                        src={file.url}
+                        src={file.blobUrl}
                         style={{...mediaStyles, height: '50px'}}
                         controls
                     />
@@ -110,7 +85,7 @@ const Gallery: React.FC<GalleryProps> = ({userDir}) => {
                             width: "100%",
                             padding: "10px",
                             textAlign: "center",
-                            backgroundColor: "#f0f0f0"
+                            backgroundColor: "#f0f0f0",
                         }}
                     >
                         Unsupported file type
@@ -119,36 +94,27 @@ const Gallery: React.FC<GalleryProps> = ({userDir}) => {
         }
     };
 
-    if (isLoading) {
-        return <div>Loading...</div>;
-    }
-
     const breakpointColumnsObj = {
         default: 5,
         900: 4,
         700: 3,
         500: 2,
-        300: 2
+        300: 1,
     };
 
     return (
-        <div style={{marginTop: '70px'}}>
-            <MasonryCSS
-                breakpointCols={breakpointColumnsObj}
-                className="masonry-grid"
-                columnClassName="masonry-grid-col"
-            >
-                {media.map((file, index) => {
-                    const token = sessionStorage.getItem('authToken');
-
-                    if (!token || !userDir) {
-                        navigate('/');
-                        return;
-                    }
-
-                    return (
+        <div style={{marginTop: '70px', padding: '10px'}}>
+            {media.length === 0 && isLoading ? (
+                <div>Loading media...</div>
+            ) : (
+                <MasonryCSS
+                    breakpointCols={breakpointColumnsObj}
+                    className="masonry-grid"
+                    columnClassName="masonry-grid-col"
+                >
+                    {media.map((file) => (
                         <div
-                            key={index}
+                            key={file.filename}
                             className="media-container"
                             style={{
                                 padding: "5px",
@@ -156,7 +122,7 @@ const Gallery: React.FC<GalleryProps> = ({userDir}) => {
                         >
                             {renderMediaContent(file)}
                             <a
-                                href={`${import.meta.env.VITE_HOST}/cdn/${userDir}/src/${file.filename.replace('compressed_', '')}?token=${token}`}
+                                href={file.url}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 style={{
@@ -165,12 +131,14 @@ const Gallery: React.FC<GalleryProps> = ({userDir}) => {
                                     textDecoration: "none",
                                     color: "blue",
                                 }}
-                            >{file.filename.replace('compressed_', '') || 'file'}
+                            >
+                                {file.filename}
                             </a>
                         </div>
-                    )
-                })}
-            </MasonryCSS>
+                    ))}
+                </MasonryCSS>
+            )}
+            {isLoading && media.length > 0 && <div>Loading more media...</div>}
         </div>
     );
 };

@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, {useState} from 'react';
+import {useNavigate} from 'react-router-dom';
 import axios from "axios";
 
 const SignUpPage: React.FC = () => {
@@ -24,7 +24,7 @@ const SignUpPage: React.FC = () => {
                     email,
                     password
                 });
-                if (response.status === 200) {
+                if (response.status === 201) {
                     setError('');
                     alert('Successfully registered!');
                     navigate('/login');

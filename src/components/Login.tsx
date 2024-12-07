@@ -30,18 +30,18 @@ const LoginPage: React.FC = () => {
                 setPassword('');
                 navigate('/dashboard');
             }
-        } catch (error: unknown) {
+        } catch (error) {
             if (axios.isAxiosError(error)) {
                 if (error.response?.status === 401) {
                     setError('Invalid username or password.');
                     setPassword('');
                 } else {
-                    setError('An error occurred. Please try again later.');
-                    console.error('Error:', error);
+                    setError('An unknown error occurred');
+                    console.error(error);
                 }
             } else {
-                console.error('Unknown error:', error);
                 setError('An unexpected error occurred.');
+                console.error(error);
             }
         }
     };

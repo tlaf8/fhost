@@ -1,5 +1,6 @@
 import {BrowserRouter as Router, Link, Route, Routes, useNavigate} from 'react-router-dom';
 import React, {useCallback, useEffect, useState} from 'react';
+import {MediaProvider} from "./contexts/MediaContext.tsx";
 import Gallery from './components/Gallery';
 import UploadPage from './components/UploadPage';
 import Landing from './components/Landing';
@@ -20,37 +21,27 @@ const AppContent: React.FC = () => {
     const [userDir, setUserDir] = useState<string | null>(null);
     const navigate = useNavigate();
 
-    const validateSession = useCallback(async (token: string | null) => {
+    const validateSession = useCallback(async () => {
+        const token = sessionStorage.getItem('authToken');
         if (!token) {
             setUserId(-1);
             setUsername(null);
             setUserDir(null);
+            return;
         }
 
-        try {
-            const response = await axios.get(`${import.meta.env.VITE_HOST}/api/validate`, {
-                headers: {
-                    Authorization: `Bearer ${token}`,
-                },
-            });
-
-            setUserId(response.data.userId);
-            setUsername(response.data.username);
-            setUserDir(response.data.userDir);
-        } catch (error) {
-            if (axios.isAxiosError(error)) {
-                if (error.response?.status === 401) {
-                    alert('Session is invalid or expired. Please log in again.');
-                } else {
-                    alert('An unknown error occurred while validating session. Please log in again.');
-                }
-            } else {
-                alert('An unknown error occurred. Please log in again.');
+        const response = await axios.get(`${import.meta.env.VITE_HOST}/api/token`, {
+            headers: {
+                Authorization: `Bearer ${token}`
             }
-            sessionStorage.removeItem('authToken');
-            navigate('/login');
+        })
+
+        if (response.status === 200 && response.data !== null) {
+            setUserId(response.data.id);
+            setUsername(response.data.username);
+            setUserDir(response.data.path);
         }
-    }, [navigate]);
+    }, [])
 
     const handleLogout = () => {
         sessionStorage.removeItem('authToken');
@@ -61,38 +52,18 @@ const AppContent: React.FC = () => {
     };
 
     useEffect(() => {
-        const checkAuthentication = async () => {
-            const token = sessionStorage.getItem('authToken');
-            if (token) {
-                try {
-                    await validateSession(token);
-                } catch (error) {
-                    if (isAxiosError(error)) {
-                        if (error.response?.status === 401) {
-                            alert('Session expired. Please log in again.');
-                        }
-                    }
+        validateSession().catch((error) => {
+            if (isAxiosError(error)) {
+                if (error.status === 401) {
                     sessionStorage.removeItem('authToken');
                     setUserId(-1);
                     setUsername(null);
                     setUserDir(null);
+                    alert("Session timed out or invalid. Please log in again.");
                     navigate('/');
                 }
-            } else {
-                sessionStorage.removeItem('authToken');
-                setUserId(-1);
-                setUsername(null);
-                setUserDir(null);
             }
-        };
-
-        checkAuthentication().catch((error) => {
-            if (isAxiosError(error)) {
-                if (!(error.response?.status === 401)) {
-                    console.error("Unknown error occurred:", error);
-                }
-            }
-        });
+        })
     }, [navigate, validateSession]);
 
     return (
@@ -198,9 +169,11 @@ const AppContent: React.FC = () => {
 
 const App: React.FC = () => {
     return (
-        <Router>
-            <AppContent/>
-        </Router>
+        <MediaProvider>
+            <Router>
+                <AppContent/>
+            </Router>
+        </MediaProvider>
     );
 };
 
